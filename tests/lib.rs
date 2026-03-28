@@ -6,6 +6,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod test_utils;
+pub mod tax_compliance;
 
 // Re-export commonly used items
 pub use test_utils::*;

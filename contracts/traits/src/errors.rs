@@ -15,7 +15,6 @@ use scale_info::TypeInfo;
 /// =============================================================================
 /// Base Error Trait
 /// =============================================================================
-
 /// Base trait for all PropChain contract errors.
 /// All contract-specific error enums must implement this trait.
 pub trait ContractError: fmt::Debug + fmt::Display + Encode + Decode {
@@ -73,7 +72,6 @@ impl fmt::Display for ErrorCategory {
 /// =============================================================================
 /// Common Error Variants
 /// =============================================================================
-
 /// Common error variants that can be used across multiple contracts
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(TypeInfo))]
@@ -103,7 +101,9 @@ pub enum CommonError {
 impl fmt::Display for CommonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CommonError::Unauthorized => write!(f, "Unauthorized: caller lacks required permissions"),
+            CommonError::Unauthorized => {
+                write!(f, "Unauthorized: caller lacks required permissions")
+            }
             CommonError::InvalidParameters => write!(f, "Invalid parameters provided to function"),
             CommonError::NotFound => write!(f, "Resource not found"),
             CommonError::InsufficientFunds => write!(f, "Insufficient funds or balance"),
@@ -124,7 +124,9 @@ impl ContractError for CommonError {
 
     fn error_description(&self) -> &'static str {
         match self {
-            CommonError::Unauthorized => "Caller does not have permission to perform this operation",
+            CommonError::Unauthorized => {
+                "Caller does not have permission to perform this operation"
+            }
             CommonError::InvalidParameters => "One or more function parameters are invalid",
             CommonError::NotFound => "The requested resource does not exist",
             CommonError::InsufficientFunds => "Account has insufficient balance for this operation",
@@ -145,7 +147,6 @@ impl ContractError for CommonError {
 /// =============================================================================
 /// Error Code Constants
 /// =============================================================================
-
 /// Common error codes (1-999)
 pub mod common_codes {
     pub const UNAUTHORIZED: u32 = 1;
