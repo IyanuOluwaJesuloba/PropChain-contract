@@ -154,3 +154,19 @@ pub const MONITORING_CRITICAL_THRESHOLD_BIPS: u32 = 2_500;
 
 /// Minimum milliseconds between repeated alert emissions for the same alert type (5 minutes).
 pub const MONITORING_ALERT_COOLDOWN_MS: u64 = 300_000;
+// ── Validation Constants ────────────────────────────────────────────────────
+
+/// Maximum batch operation size to prevent DoS via gas exhaustion.
+pub const MAX_BATCH_SIZE: u32 = 50;
+
+/// Maximum length for reason/resolution strings.
+pub const MAX_REASON_LENGTH: u32 = 2_000;
+
+/// Maximum length for URL strings (evidence_url, metadata_url, documents_url).
+pub const MAX_URL_LENGTH: u32 = 2_048;
+
+/// Maximum pause duration in seconds (30 days).
+pub const MAX_PAUSE_DURATION: u64 = 2_592_000;
+
+/// Minimum pause duration in seconds (1 minute).
+pub const MIN_PAUSE_DURATION: u64 = 60;
