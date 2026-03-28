@@ -1041,7 +1041,8 @@ mod tests {
 
         let property_ids = contract
             .batch_register_properties(properties)
-            .expect("Failed to batch register");
+            .expect("Failed to batch register")
+            .successes;
         assert_eq!(property_ids.len(), 3);
         assert_eq!(property_ids, vec![1, 2, 3]);
         assert_eq!(contract.property_count(), 3);
@@ -1088,7 +1089,8 @@ mod tests {
 
         let property_ids = contract
             .batch_register_properties(properties)
-            .expect("Failed to batch register");
+            .expect("Failed to batch register")
+            .successes;
 
         // Transfer all properties to Bob
         assert!(contract
@@ -1110,6 +1112,28 @@ mod tests {
         assert_eq!(bob_properties.len(), 2);
         assert!(bob_properties.contains(&1));
         assert!(bob_properties.contains(&2));
+    }
+
+    #[ink::test]
+    fn batch_transfer_properties_size_guard_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        ink::env::test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+        let mut contract = PropertyRegistry::new();
+
+        let props = vec![
+            create_custom_metadata("Prop 1", 100, "Desc", 100000, "url"),
+            create_custom_metadata("Prop 2", 200, "Desc", 200000, "url"),
+        ];
+        let ids = contract.batch_register_properties(props).unwrap().successes;
+
+        // Set max to 1 after registering
+        contract.update_batch_config(1, 1).unwrap();
+
+        assert_eq!(
+            contract.batch_transfer_properties(ids, accounts.bob),
+            Err(Error::BatchSizeExceeded)
+        );
     }
 
     #[ink::test]
@@ -1138,7 +1162,8 @@ mod tests {
 
         let property_ids = contract
             .batch_register_properties(properties)
-            .expect("Failed to batch register");
+            .expect("Failed to batch register")
+            .successes;
 
         // Update metadata for all properties
         let updates = vec![
@@ -1164,7 +1189,8 @@ mod tests {
             ),
         ];
 
-        assert!(contract.batch_update_metadata(updates).is_ok());
+        let result = contract.batch_update_metadata(updates).unwrap();
+        assert!(result.failures.is_empty());
 
         // Verify updates
         let property1 = contract.get_property(property_ids[0]).unwrap();
@@ -1211,7 +1237,8 @@ mod tests {
 
         let property_ids = contract
             .batch_register_properties(properties)
-            .expect("Failed to batch register");
+            .expect("Failed to batch register")
+            .successes;
 
         // Transfer properties to different recipients
         let transfers = vec![
@@ -1304,7 +1331,8 @@ mod tests {
 
         let property_ids = contract
             .batch_register_properties(properties)
-            .expect("Failed to batch register");
+            .expect("Failed to batch register")
+            .successes;
 
         // Get portfolio details
         let details = contract.get_portfolio_details(accounts.alice);
@@ -1571,7 +1599,8 @@ mod tests {
 
         let property_ids = contract
             .batch_register_properties(properties)
-            .expect("Failed to batch register");
+            .expect("Failed to batch register")
+            .successes;
 
         // Try to transfer as unauthorized user
         set_caller(accounts.bob);
@@ -1598,7 +1627,8 @@ mod tests {
 
         let property_ids = contract
             .batch_register_properties(properties)
-            .expect("Failed to batch register");
+            .expect("Failed to batch register")
+            .successes;
 
         // Try to update as unauthorized user
         set_caller(accounts.bob);
@@ -1613,10 +1643,10 @@ mod tests {
             },
         )];
 
-        assert_eq!(
-            contract.batch_update_metadata(updates),
-            Err(Error::Unauthorized)
-        );
+        let result = contract.batch_update_metadata(updates).unwrap();
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].error, Error::Unauthorized);
+        assert!(result.successes.is_empty());
     }
 
     #[ink::test]
@@ -1858,6 +1888,43 @@ mod tests {
     }
 
     // ============================================================================
+    // BATCH CONFIG AND MONITORING TESTS
+    // ============================================================================
+
+    #[ink::test]
+    fn update_batch_config_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        let mut contract = PropertyRegistry::new();
+
+        // Default config
+        let config = contract.get_batch_config();
+        assert_eq!(config.max_batch_size, 50);
+        assert_eq!(config.max_failure_threshold, 5);
+
+        // Update as admin
+        assert!(contract.update_batch_config(100, 10).is_ok());
+
+        let config = contract.get_batch_config();
+        assert_eq!(config.max_batch_size, 100);
+        assert_eq!(config.max_failure_threshold, 10);
+    }
+
+    #[ink::test]
+    fn update_batch_config_unauthorized_fails() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        let mut contract = PropertyRegistry::new();
+
+        // Try as non-admin
+        set_caller(accounts.bob);
+        assert_eq!(
+            contract.update_batch_config(100, 10),
+            Err(Error::Unauthorized)
+        );
+    }
+
+    // ============================================================================
     // INPUT VALIDATION TESTS (Issue #79)
     // ============================================================================
 
@@ -1875,6 +1942,37 @@ mod tests {
         assert_eq!(
             contract.transfer_property(property_id, zero),
             Err(Error::ZeroAddress)
+        );
+    }
+
+    #[ink::test]
+    fn update_batch_config_invalid_params_fails() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        let mut contract = PropertyRegistry::new();
+
+        // max_batch_size = 0
+        assert_eq!(
+            contract.update_batch_config(0, 5),
+            Err(Error::InvalidMetadata)
+        );
+
+        // max_batch_size > 200
+        assert_eq!(
+            contract.update_batch_config(201, 5),
+            Err(Error::InvalidMetadata)
+        );
+
+        // max_failure_threshold > max_batch_size
+        assert_eq!(
+            contract.update_batch_config(50, 51),
+            Err(Error::InvalidMetadata)
+        );
+
+        // max_failure_threshold = 0
+        assert_eq!(
+            contract.update_batch_config(50, 0),
+            Err(Error::InvalidMetadata)
         );
     }
 
@@ -2037,7 +2135,7 @@ mod tests {
             .collect();
         assert_eq!(
             contract.batch_register_properties(properties),
-            Err(Error::BatchSizeLimitExceeded)
+            Err(Error::BatchSizeExceeded)
         );
     }
 
@@ -2102,6 +2200,228 @@ mod tests {
             Err(Error::ValueOutOfBounds)
         );
     }
+
+    // -- Batch Config Size Guard Tests (from main) --
+
+    #[ink::test]
+    fn batch_register_properties_size_guard_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        let mut contract = PropertyRegistry::new();
+
+        // Set max batch size to 2
+        contract.update_batch_config(2, 1).unwrap();
+
+        let properties = vec![
+            create_custom_metadata("Prop 1", 100, "Desc 1", 100000, "url1"),
+            create_custom_metadata("Prop 2", 200, "Desc 2", 200000, "url2"),
+            create_custom_metadata("Prop 3", 300, "Desc 3", 300000, "url3"),
+        ];
+
+        assert_eq!(
+            contract.batch_register_properties(properties),
+            Err(Error::BatchSizeExceeded)
+        );
+        assert_eq!(contract.property_count(), 0);
+    }
+
+    #[ink::test]
+    fn batch_register_properties_partial_success_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        ink::env::test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+        let mut contract = PropertyRegistry::new();
+
+        let properties = vec![
+            create_custom_metadata("Valid Prop 1", 100, "Desc 1", 100000, "url1"),
+            create_custom_metadata("", 200, "Desc 2", 200000, "url2"), // Invalid: empty location
+            create_custom_metadata("Valid Prop 3", 300, "Desc 3", 300000, "url3"),
+        ];
+
+        let result = contract.batch_register_properties(properties).unwrap();
+
+        // 2 succeed, 1 fails
+        assert_eq!(result.successes.len(), 2);
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].index, 1);
+        assert_eq!(result.failures[0].error, Error::InvalidMetadata);
+        assert_eq!(result.metrics.total_items, 3);
+        assert_eq!(result.metrics.successful_items, 2);
+        assert_eq!(result.metrics.failed_items, 1);
+        assert!(!result.metrics.early_terminated);
+
+        // Verify IDs are contiguous
+        assert_eq!(result.successes, vec![1, 2]);
+        assert_eq!(contract.property_count(), 2);
+
+        // Verify properties exist and are correct
+        let prop1 = contract.get_property(1).unwrap();
+        assert_eq!(prop1.metadata.location, "Valid Prop 1");
+        let prop2 = contract.get_property(2).unwrap();
+        assert_eq!(prop2.metadata.location, "Valid Prop 3");
+    }
+
+    #[ink::test]
+    fn batch_register_properties_early_termination_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        ink::env::test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+        let mut contract = PropertyRegistry::new();
+
+        // Set failure threshold to 2
+        contract.update_batch_config(50, 2).unwrap();
+
+        let properties = vec![
+            create_custom_metadata("Valid", 100, "Desc", 100000, "url"),
+            create_custom_metadata("", 200, "Desc", 200000, "url"),     // fail 1
+            create_custom_metadata("", 300, "Desc", 300000, "url"),     // fail 2 -> early terminate
+            create_custom_metadata("Never reached", 400, "Desc", 400000, "url"),
+        ];
+
+        let result = contract.batch_register_properties(properties).unwrap();
+
+        assert_eq!(result.successes.len(), 1);
+        assert_eq!(result.failures.len(), 2);
+        assert!(result.metrics.early_terminated);
+        assert_eq!(result.metrics.total_items, 4);
+
+        // Stats should record the early termination
+        let stats = contract.get_batch_stats();
+        assert_eq!(stats.total_early_terminations, 1);
+    }
+
+    #[ink::test]
+    fn batch_update_metadata_size_guard_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        ink::env::test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+        let mut contract = PropertyRegistry::new();
+
+        // Set max to 1
+        contract.update_batch_config(1, 1).unwrap();
+
+        let props = vec![
+            create_custom_metadata("Prop 1", 100, "Desc", 100000, "url"),
+        ];
+        let ids = contract.batch_register_properties(props).unwrap().successes;
+
+        let updates = vec![
+            (ids[0], create_custom_metadata("Updated 1", 200, "Desc", 200000, "url")),
+            (999, create_custom_metadata("Updated 2", 300, "Desc", 300000, "url")),
+        ];
+
+        assert_eq!(
+            contract.batch_update_metadata(updates),
+            Err(Error::BatchSizeExceeded)
+        );
+    }
+
+    #[ink::test]
+    fn batch_update_metadata_partial_success_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        ink::env::test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+        let mut contract = PropertyRegistry::new();
+
+        let props = vec![
+            create_custom_metadata("Prop 1", 100, "Desc 1", 100000, "url1"),
+            create_custom_metadata("Prop 2", 200, "Desc 2", 200000, "url2"),
+        ];
+        let ids = contract.batch_register_properties(props).unwrap().successes;
+
+        let updates = vec![
+            (ids[0], create_custom_metadata("Updated 1", 150, "Updated Desc", 150000, "url_updated")),
+            (999, create_custom_metadata("Nonexistent", 300, "Desc", 300000, "url")), // PropertyNotFound
+            (ids[1], create_custom_metadata("", 250, "Desc", 250000, "url")),          // InvalidMetadata
+        ];
+
+        let result = contract.batch_update_metadata(updates).unwrap();
+
+        assert_eq!(result.successes.len(), 1);
+        assert_eq!(result.successes[0], ids[0]);
+        assert_eq!(result.failures.len(), 2);
+        assert_eq!(result.failures[0].index, 1);
+        assert_eq!(result.failures[0].error, Error::PropertyNotFound);
+        assert_eq!(result.failures[1].index, 2);
+        assert_eq!(result.failures[1].error, Error::InvalidMetadata);
+
+        // Verify the successful update took effect
+        let prop = contract.get_property(ids[0]).unwrap();
+        assert_eq!(prop.metadata.location, "Updated 1");
+
+        // Verify the untouched property is unchanged
+        let prop2 = contract.get_property(ids[1]).unwrap();
+        assert_eq!(prop2.metadata.location, "Prop 2");
+    }
+
+    #[ink::test]
+    fn batch_transfer_to_multiple_size_guard_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        ink::env::test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+        let mut contract = PropertyRegistry::new();
+
+        let props = vec![
+            create_custom_metadata("Prop 1", 100, "Desc", 100000, "url"),
+            create_custom_metadata("Prop 2", 200, "Desc", 200000, "url"),
+        ];
+        let ids = contract.batch_register_properties(props).unwrap().successes;
+
+        // Set max to 1 AFTER registration
+        contract.update_batch_config(1, 1).unwrap();
+
+        let transfers = vec![
+            (ids[0], accounts.bob),
+            (ids[1], accounts.charlie),
+        ];
+
+        assert_eq!(
+            contract.batch_transfer_properties_to_multiple(transfers),
+            Err(Error::BatchSizeExceeded)
+        );
+    }
+
+    #[ink::test]
+    fn batch_stats_accumulation_works() {
+        let accounts = default_accounts();
+        set_caller(accounts.alice);
+        ink::env::test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+        let mut contract = PropertyRegistry::new();
+
+        // Batch 1: Register 3 properties (all succeed)
+        let props = vec![
+            create_custom_metadata("Prop 1", 100, "Desc", 100000, "url"),
+            create_custom_metadata("Prop 2", 200, "Desc", 200000, "url"),
+            create_custom_metadata("Prop 3", 300, "Desc", 300000, "url"),
+        ];
+        let result = contract.batch_register_properties(props).unwrap();
+        assert_eq!(result.successes.len(), 3);
+
+        // Batch 2: Register 2 with 1 failure
+        let props2 = vec![
+            create_custom_metadata("Prop 4", 400, "Desc", 400000, "url"),
+            create_custom_metadata("", 500, "Desc", 500000, "url"), // invalid
+        ];
+        let result2 = contract.batch_register_properties(props2).unwrap();
+        assert_eq!(result2.successes.len(), 1);
+        assert_eq!(result2.failures.len(), 1);
+
+        // Batch 3: Transfer (atomic, all succeed)
+        let ids = result.successes;
+        contract
+            .batch_transfer_properties(ids, accounts.bob)
+            .unwrap();
+
+        // Verify accumulated stats
+        let stats = contract.get_batch_stats();
+        assert_eq!(stats.total_batches_processed, 3);
+        assert_eq!(stats.total_items_processed, 7); // 3 + 1 + 3
+        assert_eq!(stats.total_items_failed, 1);
+        assert_eq!(stats.total_early_terminations, 0);
+        assert_eq!(stats.largest_batch_processed, 3);
+    }
+
+    // -- Issue #79 Numeric/Range/Transfer validation tests --
 
     #[ink::test]
     fn test_issue_badge_past_expiry_rejected() {
