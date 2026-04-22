@@ -308,7 +308,8 @@ fn security_audit_report() {
     audit.add(SecurityFinding {
         id: "CP-06".to_string(),
         title: "Document tampering by non-owner".to_string(),
-        description: "Verified that non-owners cannot attach legal documents to a token.".to_string(),
+        description: "Verified that non-owners cannot attach legal documents to a token."
+            .to_string(),
         severity: Severity::High,
         category: "Compliance".to_string(),
         status: FindingStatus::Mitigated,
@@ -319,7 +320,9 @@ fn security_audit_report() {
     audit.add(SecurityFinding {
         id: "FZ-01".to_string(),
         title: "Ghost token ID handling".to_string(),
-        description: "Proptest verified that random non-existent token IDs always return TokenNotFound.".to_string(),
+        description:
+            "Proptest verified that random non-existent token IDs always return TokenNotFound."
+                .to_string(),
         severity: Severity::Medium,
         category: "Fuzz Testing".to_string(),
         status: FindingStatus::Mitigated,
