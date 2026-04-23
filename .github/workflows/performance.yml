@@ -13,6 +13,8 @@ jobs:
   performance-regression:
     name: Detect Performance Regressions
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
 
     steps:
       - name: Checkout code

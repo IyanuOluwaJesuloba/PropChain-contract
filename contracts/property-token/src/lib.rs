@@ -1427,7 +1427,10 @@ pub mod property_token {
                 return Err(Error::Unauthorized);
             }
 
-            let mut property_info = self.token_properties.get(token_id).ok_or(Error::TokenNotFound)?;
+            let mut property_info = self
+                .token_properties
+                .get(token_id)
+                .ok_or(Error::TokenNotFound)?;
             property_info.metadata = metadata;
             self.token_properties.insert(token_id, &property_info);
 
@@ -2863,6 +2866,9 @@ pub mod property_token {
                 stake.amount.saturating_mul(stake.lock_period.multiplier()) / 100
             } else {
                 self.balances.get((voter, token_id)).unwrap_or(0)
+            }
+        }
+
         // =========================================================================
         // Vesting Methods
         // =========================================================================
@@ -2896,7 +2902,8 @@ pub mod property_token {
             if creator_balance < total_amount {
                 return Err(Error::Unauthorized); // Insufficient fractional shares
             }
-            self.balances.insert((caller, token_id), &(creator_balance - total_amount));
+            self.balances
+                .insert((caller, token_id), &(creator_balance - total_amount));
 
             let schedule = VestingSchedule {
                 role: role.clone(),
@@ -2907,7 +2914,8 @@ pub mod property_token {
                 vesting_duration,
             };
 
-            self.vesting_schedules.insert((token_id, account), &schedule);
+            self.vesting_schedules
+                .insert((token_id, account), &schedule);
 
             self.env().emit_event(VestingScheduleCreated {
                 token_id,
@@ -2926,10 +2934,13 @@ pub mod property_token {
         #[ink(message)]
         pub fn claim_vested_tokens(&mut self, token_id: TokenId) -> Result<(), Error> {
             let caller = self.env().caller();
-            let mut schedule = self.vesting_schedules.get((token_id, caller)).ok_or(Error::Unauthorized)?; // Using Unauthorized generically as there's no custom vesting error yet
+            let mut schedule = self
+                .vesting_schedules
+                .get((token_id, caller))
+                .ok_or(Error::Unauthorized)?; // Using Unauthorized generically as there's no custom vesting error yet
 
             let current_time = self.env().block_timestamp();
-            
+
             // Calculate vested amount
             let vested_amount = if current_time < schedule.start_time + schedule.cliff_duration {
                 0
@@ -2937,7 +2948,8 @@ pub mod property_token {
                 schedule.total_amount
             } else {
                 let time_vested = current_time - schedule.start_time;
-                (schedule.total_amount as u128 * time_vested as u128) / (schedule.vesting_duration as u128)
+                (schedule.total_amount as u128 * time_vested as u128)
+                    / (schedule.vesting_duration as u128)
             };
 
             let claimable = vested_amount.saturating_sub(schedule.claimed_amount);
@@ -2950,7 +2962,8 @@ pub mod property_token {
 
             // Add the fractional shares to the caller's balance
             let current_balance = self.balances.get((caller, token_id)).unwrap_or(0);
-            self.balances.insert((caller, token_id), &(current_balance + claimable));
+            self.balances
+                .insert((caller, token_id), &(current_balance + claimable));
 
             self.env().emit_event(VestedTokensClaimed {
                 token_id,
@@ -2973,11 +2986,7 @@ pub mod property_token {
 
         /// Calculates the amount of tokens currently vested
         #[ink(message)]
-        pub fn get_vested_amount(
-            &self,
-            token_id: TokenId,
-            account: AccountId,
-        ) -> u128 {
+        pub fn get_vested_amount(&self, token_id: TokenId, account: AccountId) -> u128 {
             if let Some(schedule) = self.vesting_schedules.get((token_id, account)) {
                 let current_time = self.env().block_timestamp();
                 if current_time < schedule.start_time + schedule.cliff_duration {
@@ -2986,7 +2995,8 @@ pub mod property_token {
                     schedule.total_amount
                 } else {
                     let time_vested = current_time - schedule.start_time;
-                    (schedule.total_amount as u128 * time_vested as u128) / (schedule.vesting_duration as u128)
+                    (schedule.total_amount as u128 * time_vested as u128)
+                        / (schedule.vesting_duration as u128)
                 }
             } else {
                 0
