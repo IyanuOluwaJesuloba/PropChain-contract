@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = []
 # ingest feature broken with subxt 0.33 - requires API update
+ingest = []
 # ingest = ["subxt"]
 
 [dependencies]
