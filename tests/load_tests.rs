@@ -599,8 +599,6 @@ mod api_rate_limit_tests {
     // ── Simulation helper ────────────────────────────────────────────────────
 
     struct RateLimiterSim {
-        rate_per_second: u64, // tokens added per second
-        burst_size: u64,      // max tokens (bucket capacity)
         rate_per_second: u64,
         burst_size: u64,
         tokens: u64,
